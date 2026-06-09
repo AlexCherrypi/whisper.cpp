@@ -618,8 +618,14 @@ void ggml_metal_rsets_free(ggml_metal_rsets_t rsets) {
         return;
     }
 
-    // note: if you hit this assert, most likely you haven't deallocated all Metal resources before exiting
-    GGML_ASSERT([rsets->data count] == 0);
+    // note: leftover entries here mean not every Metal resource was removed before teardown.
+    // Aborting (GGML_ASSERT) would crash the app on quit (macOS 15+ residency sets). The data
+    // array is released below — which releases the residency sets — so downgrade to a warning
+    // and tear down cleanly instead of calling abort().
+    if ([rsets->data count] != 0) {
+        GGML_LOG_WARN("%s: %ld residency set(s) still registered at teardown; releasing\n",
+                      __func__, (long) [rsets->data count]);
+    }
 
     atomic_store_explicit(&rsets->d_stop, true, memory_order_relaxed);
 
